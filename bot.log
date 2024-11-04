@@ -1,0 +1,19 @@
+2024-11-02 16:42:21,487 - root - ERROR - Bot stopped due to error: Missing required environment variables: TG_TOKEN, TRANS_ADDR, TRANS_USER, TRANS_PASS
+2024-11-02 16:42:49,008 - root - ERROR - Bot stopped due to error: Missing required environment variables: TG_TOKEN, TRANS_ADDR, TRANS_USER, TRANS_PASS
+2024-11-02 16:43:19,145 - root - ERROR - Bot stopped due to error: Missing required environment variables: TG_TOKEN, TRANS_ADDR, TRANS_USER, TRANS_PASS
+2024-11-02 16:44:17,396 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot1355610261:AAH2BIZYJLQxAaVbwUDQb9Twrmqc6NmEqDk/getMe "HTTP/1.1 200 OK"
+2024-11-02 16:44:17,397 - telegram.ext.Application - INFO - Application started
+2024-11-02 16:44:17,398 - root - ERROR - Bot stopped due to error: Cannot close a running event loop
+2024-11-02 16:47:23,816 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot1355610261:AAH2BIZYJLQxAaVbwUDQb9Twrmqc6NmEqDk/getMe "HTTP/1.1 200 OK"
+2024-11-02 16:47:23,817 - telegram.ext.Application - INFO - Application started
+2024-11-02 16:47:23,817 - root - ERROR - Error starting bot: Cannot close a running event loop
+2024-11-02 16:47:23,817 - telegram.ext.Application - INFO - Application is stopping. This might take a moment.
+2024-11-02 16:47:23,817 - telegram.ext.Application - INFO - Application.stop() complete
+2024-11-02 16:47:23,819 - root - ERROR - Bot stopped due to error: This Application is not running!
+2024-11-02 16:48:15,777 - root - INFO - Starting bot...
+2024-11-02 16:48:15,915 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot1355610261:AAH2BIZYJLQxAaVbwUDQb9Twrmqc6NmEqDk/getMe "HTTP/1.1 200 OK"
+2024-11-02 16:48:15,915 - telegram.ext.Application - INFO - Application started
+2024-11-02 16:48:15,916 - root - ERROR - Error: Cannot close a running event loop
+2024-11-02 16:48:15,917 - root - INFO - Stopping bot...
+2024-11-02 16:48:15,917 - telegram.ext.Application - INFO - Application is stopping. This might take a moment.
+2024-11-02 16:48:15,917 - telegram.ext.Application - INFO - Application.stop() complete
