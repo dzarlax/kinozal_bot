@@ -14,8 +14,5 @@ COPY . .
 # Set environment variables file path
 ENV NODE_ENV=production
 
-# Expose port if needed (e.g., if Telegram Bot API requires specific port)
-EXPOSE 3000
-
 # Start the bot
 CMD ["node", "node.js"]

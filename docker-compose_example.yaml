@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   bot:
-    build: .
-    container_name: telegram_bot
+    image: dzarlax/kinozalbot:latest
+    container_name: kinozal_bot
     environment:
       TG_TOKEN: "your-telegram-bot-token"
       KZ_ADDR: "your-kinozal-address"
