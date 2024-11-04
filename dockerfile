@@ -10,7 +10,7 @@ RUN npm install
 
 # Copy the source code
 COPY . .
-
+RUN mkdir torrent_files
 # Set environment variables file path
 ENV NODE_ENV=production
 
