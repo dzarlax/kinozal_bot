@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: telegram_bot
+    environment:
+      TG_TOKEN: "your-telegram-bot-token"
+      KZ_ADDR: "your-kinozal-address"
+      KZ_USER: "your-kinozal-username"
+      KZ_PASS: "your-kinozal-password"
+      TRANS_ADDR: "transmission"  # Transmission service hostname
+      TRANS_USER: "your-transmission-username"
+      TRANS_PASS: "your-transmission-password"
+    # volumes:
+    #   - ./torrent_files:/app/torrent_files  # Map torrent files to the host
+    # depends_on:
+    #   - transmission
+    restart: unless-stopped
+
+  # transmission:
+  #   image: linuxserver/transmission
+  #   container_name: transmission
+  #   environment:
+  #     - PUID=1000  # Change based on your system
+  #     - PGID=1000  # Change based on your system
+  #     - TRANSMISSION_WEB_HOME=/transmission/web
+  #     - USER=your-transmission-username
+  #     - PASS=your-transmission-password
+  #   ports:
+  #     - "9091:9091"  # Port mapping for Transmission
+  #   volumes:
+  #     - /path/to/downloads:/downloads  # Change path as needed
+  #     - /path/to/config:/config        # Transmission config
+  #   restart: unless-stopped
