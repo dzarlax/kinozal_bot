@@ -355,8 +355,9 @@ const transmission = new Transmission({
 
 // Список доступных папок для загрузки
 const downloadFolders = [
-    { name: "Фильмы", path: "/volume1/Films" },
-    { name: "Сериалы", path: "/volume1/Series" }
+    { name: "Фильмы", path: process.env.FILMS_FOLDER },
+    { name: "Сериалы", path: process.env.SERIES_FOLDER },
+    { name: "Сериалы", path: process.env.AUDIOBOOKS_FOLDER }
 ];
 
 // Команда для добавления в Transmission с выбором папки

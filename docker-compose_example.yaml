@@ -12,6 +12,9 @@ services:
       TRANS_ADDR: "transmission"  # Transmission service hostname
       TRANS_USER: "your-transmission-username"
       TRANS_PASS: "your-transmission-password"
+      FILMS_FOLDER: "your-films-folder"
+      SERIES_FOLDER: "/your-series-folder"
+      AUDIOBOOKS_FOLDER: "your-audiobooks-folder"
     # volumes:
     #   - ./torrent_files:/app/torrent_files  # Map torrent files to the host
     # depends_on:
