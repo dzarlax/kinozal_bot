@@ -35,6 +35,9 @@ COPY --from=builder /app/userManagement.js ./
 COPY --from=builder /app/menu.js ./
 COPY --from=builder /app/package*.json ./
 
+# Set proper ownership after copying files
+RUN chown -R appuser:appgroup /app
+
 # Set environment variables
 ENV NODE_ENV=production \
     TZ=UTC
