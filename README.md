@@ -13,7 +13,7 @@ Telegram bot for downloading torrents from Kinozal.tv with automatic integration
 - 🐳 Docker support
 
 ## Installation on Synology
-Is [here] (SYNOLOGY.md)
+Is [here](SYNOLOGY.md)
 
 ## Prerequisites
 
