@@ -22,12 +22,17 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # Set working directory
 WORKDIR /app
 
-# Create and set permissions for torrent_files directory
-RUN mkdir torrent_files && chown appuser:appgroup torrent_files
-
-# Copy built application from builder stage
+# Copy application files from builder stage
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/node.js ./node.js
+COPY --from=builder /app/node.js ./
+COPY --from=builder /app/config.js ./
+COPY --from=builder /app/errors.js ./
+COPY --from=builder /app/errorHandler.js ./
+COPY --from=builder /app/fileUtils.js ./
+COPY --from=builder /app/logger.js ./
+COPY --from=builder /app/middleware.js ./
+COPY --from=builder /app/userManagement.js ./
+COPY --from=builder /app/menu.js ./
 COPY --from=builder /app/package*.json ./
 
 # Set environment variables
@@ -37,12 +42,9 @@ ENV NODE_ENV=production \
 # Switch to non-root user
 USER appuser
 
-# Set volume for torrent files
-VOLUME ["/app/torrent_files"]
-
-# Health check
+# Health check using transmission RPC
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "const http=require('http');const options={timeout:2000};const req=http.request('http://localhost:8080/health',options,(res)=>{if(res.statusCode==200){process.exit(0)}process.exit(1)});req.on('error',()=>process.exit(1));req.end()"
+    CMD wget --spider -q http://localhost:${TRANSMISSION_PORT:-9091}/transmission/rpc || exit 1
 
 # Start the bot
 CMD ["node", "node.js"]
