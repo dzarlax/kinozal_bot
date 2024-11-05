@@ -2,37 +2,53 @@ version: '3.8'
 
 services:
   bot:
-    image: dzarlax/kinozalbot:latest
+    build: .
     container_name: kinozal_bot
     environment:
+      # Telegram settings
       TG_TOKEN: "your-telegram-bot-token"
-      KZ_ADDR: "your-kinozal-address"
+      BOT_ADMIN_ID: 'your-admin-id'
+      BOT_ALLOWED_USERS: 'your-users-id'
+      
+      # Kinozal settings
+      KZ_ADDR: "kinozal.tv"
       KZ_USER: "your-kinozal-username"
       KZ_PASS: "your-kinozal-password"
-      TRANS_ADDR: "transmission"  # Transmission service hostname
+      
+      # Transmission connection settings
+      TRANS_ADDR: "transmission"
       TRANS_USER: "your-transmission-username"
       TRANS_PASS: "your-transmission-password"
-      FILMS_FOLDER: "your-films-folder"
-      SERIES_FOLDER: "/your-series-folder"
-      AUDIOBOOKS_FOLDER: "your-audiobooks-folder"
-    # volumes:
-    #   - ./torrent_files:/app/torrent_files  # Map torrent files to the host
-    # depends_on:
-    #   - transmission
+      
+      # Internal paths that match transmission's volume mappings
+      FILMS_FOLDER: "/downloads/films"
+      SERIES_FOLDER: "/downloads/series"
+      AUDIOBOOKS_FOLDER: "/downloads/audiobooks"
+    depends_on:
+      - transmission
     restart: unless-stopped
+    networks:
+      - torrent-net
 
-  # transmission:
-  #   image: linuxserver/transmission
-  #   container_name: transmission
-  #   environment:
-  #     - PUID=1000  # Change based on your system
-  #     - PGID=1000  # Change based on your system
-  #     - TRANSMISSION_WEB_HOME=/transmission/web
-  #     - USER=your-transmission-username
-  #     - PASS=your-transmission-password
-  #   ports:
-  #     - "9091:9091"  # Port mapping for Transmission
-  #   volumes:
-  #     - /path/to/downloads:/downloads  # Change path as needed
-  #     - /path/to/config:/config        # Transmission config
-  #   restart: unless-stopped
+  transmission:
+    image: linuxserver/transmission:latest
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - USER=your-transmission-username
+      - PASS=your-transmission-password
+      - TRANSMISSION_WEB_HOME=/transmission/web
+    ports:
+      - "9091:9091"
+    volumes:
+      - /path/to/downloads:/downloads  # Main downloads directory
+      - /path/to/config:/config       # Transmission configuration
+    restart: unless-stopped
+    networks:
+      - torrent-net
+
+networks:
+  torrent-net:
+    driver: bridge

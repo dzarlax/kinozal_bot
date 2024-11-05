@@ -3,3 +3,7 @@ node_modules
 .env
 torrent_files
 docker-compose.yaml
+logs
+Series
+Films
+audiobooks

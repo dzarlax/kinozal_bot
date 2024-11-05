@@ -17,6 +17,7 @@
     "iconv-lite": "^0.6.3",
     "node-telegram-bot-api": "^0.66.0",
     "tough-cookie": "^5.0.0",
-    "transmission": "^0.4.10"
+    "transmission": "^0.4.10",
+    "winston": "^3.16.0"
   }
 }

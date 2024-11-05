@@ -3,180 +3,315 @@ const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const qs = require('querystring');
 const cheerio = require('cheerio');
-const fs = require('fs');
+const path = require('path');
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
 const iconv = require('iconv-lite');
-const path = require('path');
 const Transmission = require('transmission');
 
-// Загрузка переменных из конфигурационного файла
-const bot = new TelegramBot(process.env.TG_TOKEN, { polling: true });
+// Import your existing modules
+const { config } = require('./config');
+const { fileUtils } = require('./fileutils');
+const { logger } = require('./logger');  // Make sure this is imported before other custom modules
+const { BotError, KinozalError, TransmissionError } = require('./errors');
+const { errorHandler } = require('./errorHandler');
+const AccessMiddleware = require('./middleware');
+const { setupUserManagement } = require('./userManagement');
+const { setupBotCommands, handleStart, handleHelp } = require('./menu');
 
-// Логирование событий
-function logEvent(message) {
-    const time = new Date().toLocaleTimeString();
-    console.log(`[${time}] ${message}`);
-}
+// Initialize bot with validated config
+const bot = new TelegramBot(config.telegram.token, config.telegram.options);
 
-// Поддержка cookies
+// Initialize middleware with logger
+const accessMiddleware = new AccessMiddleware(config, bot, logger);
+
+
+// Initialize cookie jar and axios client
 const jar = new CookieJar();
 const client = wrapper(axios.create({ jar }));
 
-// Функция логирования в Кинозал
+// Initialize Transmission client
+const transmission = new Transmission({
+    host: config.transmission.host,
+    port: config.transmission.port,
+    username: config.transmission.auth.username,
+    password: config.transmission.auth.password
+});
+
+// Session data storage
+const sessionData = {};
+
+// Available download folders
+const downloadFolders = [
+    { name: "Фильмы", path: config.folders.films },
+    { name: "Сериалы", path: config.folders.series },
+    { name: "Аудиокниги", path: config.folders.audiobooks }
+];
+
+/// Add this function to your node.js file or create a separate kinozal.js module
+
 async function kinozalLogin() {
-    const urlLogin = `https://${process.env.KZ_ADDR}/takelogin.php`;
-    const loginData = qs.stringify({
-        username: process.env.KZ_USER,
-        password: process.env.KZ_PASS
+    const loginUrl = `https://${config.kinozal.address}${config.kinozal.endpoints.login}`;
+    
+    logger.debug('Starting login process', {
+        url: loginUrl,
+        username: config.kinozal.username ? '****' : undefined,
+        hasPassword: !!config.kinozal.password
     });
-    const headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': `${process.env.KZ_ADDR}/`
-    };
+
+    // Prepare login data
+    const loginData = qs.stringify({
+        username: config.kinozal.username,
+        password: config.kinozal.password,
+        returnto: '/',
+        before: '//',
+        auth_submit_login: 'submit'  // Added this field
+    });
 
     try {
-        await client.post(urlLogin, loginData, { headers });
-        logEvent('Successfully logged in to Kinozal.');
+        // First, try to get the main page to ensure connectivity and get initial cookies
+        logger.debug('Testing connection to main page');
+        const testResponse = await client.get(`https://${config.kinozal.address}/`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            },
+            maxRedirects: 5,
+            validateStatus: (status) => status >= 200 && status < 500
+        });
+
+        logger.debug('Main page response:', {
+            status: testResponse.status,
+            headers: testResponse.headers,
+            cookies: jar.toJSON().cookies
+        });
+
+        // Perform login request with additional headers
+        logger.debug('Sending login request');
+        const response = await client.post(loginUrl, loginData, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Referer': `https://${config.kinozal.address}/`,
+                'Origin': `https://${config.kinozal.address}`,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Cache-Control': 'max-age=0',
+                'Upgrade-Insecure-Requests': '1'
+            },
+            maxRedirects: 5,
+            validateStatus: (status) => status >= 200 && status < 500,
+            withCredentials: true
+        });
+
+        logger.debug('Login response:', {
+            status: response.status,
+            headers: response.headers,
+            cookies: jar.toJSON().cookies,
+            responseUrl: response.request?.res?.responseUrl
+        });
+
+        // Check cookies after login
+        const cookies = jar.toJSON().cookies;
+        const hasUidCookie = cookies.some(cookie => cookie.key === 'uid');
+        const hasPassCookie = cookies.some(cookie => cookie.key === 'pass');
+
+        logger.debug('Cookie check:', {
+            hasUidCookie,
+            hasPassCookie,
+            totalCookies: cookies.length
+        });
+
+        if (hasUidCookie && hasPassCookie) {
+            logger.info('Successfully logged in to Kinozal');
+            return true;
+        }
+
+        // If we got here without getting cookies, login failed
+        throw new KinozalError('Login failed - missing required cookies', {
+            status: response.status,
+            cookies: cookies.map(c => c.key)
+        });
+
     } catch (error) {
-        logEvent('Error logging in to Kinozal: ' + error.message);
+        logger.error('Login error:', {
+            error: error.message,
+            stack: error.stack,
+            response: {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                headers: error.response?.headers
+            }
+        });
+
+        if (error instanceof KinozalError) {
+            throw error;
+        }
+
+        if (error.response) {
+            throw new KinozalError('Login request failed', {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                headers: error.response.headers
+            });
+        } else if (error.request) {
+            throw new KinozalError('No response from Kinozal server', {
+                error: error.message,
+                request: error.request
+            });
+        } else {
+            throw new KinozalError('Login request configuration error', {
+                message: error.message
+            });
+        }
     }
 }
 
-// Получение хэша и списка файлов раздачи
+// Get files and hash information
 async function getFilesAndHash(kzId) {
-    const urlHash = `https://${process.env.KZ_ADDR}/get_srv_details.php?id=${kzId}&action=2`;
-    await kinozalLogin();
+    const urlHash = `https://${config.kinozal.address}${config.kinozal.endpoints.hash}?id=${kzId}&action=2`;
+    
     try {
+        await kinozalLogin();
         const response = await client.get(urlHash, {
             responseType: 'arraybuffer',
             withCredentials: true
         });
 
         const contentType = response.headers['content-type'];
-        console.log(`[DEBUG] Content-Type for getFilesAndHash: ${contentType}`);
+        logger.debug('Content-Type for getFilesAndHash:', contentType);
         
-        // Декодирование данных с использованием iconv
-        let decodedData;
-        if (contentType && contentType.includes('windows-1251')) {
-            decodedData = iconv.decode(Buffer.from(response.data), 'win1251');
-        } else {
-            // Пробуем альтернативную кодировку, если тип не указан
-            decodedData = iconv.decode(Buffer.from(response.data), 'utf-8');
-        }
+        const decodedData = contentType?.includes('windows-1251') 
+            ? iconv.decode(Buffer.from(response.data), 'win1251')
+            : iconv.decode(Buffer.from(response.data), 'utf-8');
 
-        console.log(`[DEBUG] Response for getFilesAndHash (first 500 chars): ${decodedData.slice(0, 500)}`);
+        logger.debug('Response data preview:', decodedData.slice(0, 500));
 
-        // Проверяем на наличие ожидаемых данных
         if (!decodedData.includes("Инфо хеш")) {
-            console.error('[ERROR] Expected data (Инфо хеш) not found for ID', kzId);
-            return null;
+            throw new KinozalError('Hash info not found', { kzId });
         }
 
         return decodedData;
     } catch (error) {
-        logEvent('Error fetching files and hash.');
-        console.error('[ERROR]', error);
-        return null;
+        throw new KinozalError('Failed to get files and hash', {
+            kzId,
+            originalError: error.message
+        });
     }
 }
 
-// Скачивание торрент-файла с использованием cookies
+// Download torrent file
 async function downloadTorrent(kzId, kzName, chatId) {
-    const urlDownload = `https://dl.${process.env.KZ_ADDR}/download.php?id=${kzId}`;
-    const filePath = path.join(__dirname, 'torrent_files', `${kzId}.torrent`);
-
-    await kinozalLogin();  // Выполняем авторизацию перед скачиванием
-
+    const urlDownload = `https://dl.${config.kinozal.address}/download.php?id=${kzId}`;
+    
     try {
+        await kinozalLogin();
+
         const response = await client.get(urlDownload, {
             responseType: 'arraybuffer',
             headers: {
-                'Referer': `${process.env.KZ_ADDR}/`,
+                'Referer': `${config.kinozal.address}/`,
                 'User-Agent': 'Mozilla/5.0'
             }
         });
 
-        // Проверяем, не скачалась ли страница логина
         if (response.headers['content-type'] !== 'application/x-bittorrent') {
-            bot.sendMessage(chatId, `Ошибка при загрузке торрент-файла ${kzName}. Возможно, требуется повторная авторизация.`);
-            console.log('[ERROR] Скачалась страница логина вместо торрент-файла.');
-            return;
+            throw new KinozalError('Received non-torrent response', {
+                contentType: response.headers['content-type'],
+                kzId,
+                kzName
+            });
         }
 
-        fs.writeFileSync(filePath, response.data);
+        const torrentPath = await fileUtils.saveTorrentFile(kzId, response.data);
+        
         bot.sendMessage(chatId, `Торрент-файл ${kzName} загружен успешно.`);
-        console.log(`[INFO] Torrent ${kzName} downloaded successfully.`);
+        logger.info(`Torrent ${kzName} downloaded successfully.`);
+        
+        return torrentPath;
     } catch (error) {
-        bot.sendMessage(chatId, `Ошибка при загрузке торрент-файла ${kzName}.`);
-        console.error('[ERROR] Ошибка при загрузке торрент-файла:', error.message);
+        throw new BotError(
+            'Failed to download torrent',
+            'DOWNLOAD_ERROR',
+            { kzId, kzName, originalError: error.message }
+        );
     }
 }
 
-const sessionData = {};
-
-// Функция для получения HTML и вызова основной функции парсинга
-async function fetchData(url, typeChat) {
+// Add torrent to Transmission
+async function addToTransmission(torrentPath, downloadPath, chatId, kzName) {
     try {
-        const response = await axios.get(url);
-        const html = response.data;
-        return await readHtml(html, url, typeChat);
+        return new Promise((resolve, reject) => {
+            transmission.addFile(torrentPath, { 'download-dir': downloadPath }, async (err, result) => {
+                try {
+                    await fileUtils.cleanupTorrentFile(torrentPath);
+
+                    if (err) {
+                        reject(new TransmissionError('Failed to add torrent to Transmission', {
+                            originalError: err.message
+                        }));
+                        return;
+                    }
+
+                    bot.sendMessage(chatId, 
+                        `Торрент ${kzName} добавлен в Transmission и будет загружен в папку "${downloadPath}".`
+                    );
+                    logger.info(`Torrent ${kzName} added to Transmission.`);
+                    resolve(result);
+                } catch (cleanupError) {
+                    logger.error('Error during torrent cleanup:', cleanupError);
+                    resolve(result);
+                }
+            });
+        });
     } catch (error) {
-        console.error(`[ERROR] Ошибка при получении данных: ${error.message}`);
-        throw error;
+        throw new TransmissionError('Failed to process torrent', {
+            torrentPath,
+            downloadPath,
+            originalError: error.message
+        });
     }
 }
 
-// Основная функция для парсинга данных раздачи
-async function readHtml(html, a, typeChat) {
+// Parse HTML and extract torrent information
+async function readHtml(html, url, typeChat) {
     const $ = cheerio.load(html);
 
-    // Извлечение ID раздачи
-    const idMatch = a.match(/id=(\d+)/);
+    const idMatch = url.match(/id=(\d+)/);
     const idKz = idMatch ? idMatch[1] : null;
     if (!idKz) {
-        console.error(`[ERROR] ID не найден в переданной ссылке: ${a}`);
-        throw new Error('ID не найден в переданной ссылке.');
+        throw new BotError('Failed to extract ID from URL', 'PARSE_ERROR', { url });
     }
 
-    // Извлечение названия
     let name = $('title').text().replace(/[`_|"&;]|quot/g, '').replace(/ё/g, 'е').split('/')[0].trim();
-
-    // Извлечение жанра
     let genre = $('a.lnks_tobrs').first().text().replace(/ё/g, 'е').trim();
-
-    // Извлечение размера
-    let size = $('li:contains("Вес")').find('.floatright').text().trim();
-    if (!size) size = "Размер не найден";
-
-    // Извлечение количества раздающих
+    let size = $('li:contains("Вес")').find('.floatright').text().trim() || "Размер не найден";
     let seedersText = $('a[onclick*="Раздают"]').text().trim();
     let seeders = seedersText ? seedersText.split(' ').pop() : "Нет данных";
 
-    // Вызов функции для получения хеша
     const filesAndHash = await getFilesAndHash(idKz);
-    if (!filesAndHash) {
-        console.error(`[ERROR] Не удалось получить данные хеша для ID ${idKz}`);
-        throw new Error('Ошибка при получении данных хеша.');
-    }
-
     const infoHashMatch = filesAndHash.match(/Инфо хеш: ([a-fA-F0-9]+)/);
     const infoHash = infoHashMatch ? infoHashMatch[1] : null;
+
     if (!infoHash) {
-        console.error(`[ERROR] Инфо хеш не найден в данных для ID ${idKz}`);
-        throw new Error('Инфо хеш не найден в данных.');
+        throw new BotError('Hash not found in response', 'PARSE_ERROR', { idKz });
     }
 
-    // Формирование строки с данными
-    let data = `*${name}*\n\n*Жанр:* ${genre}\n*Размер:* ${size}\n*Раздают:* ${seeders}\n*Инфо хеш:* \`${infoHash}\`\n`;
-    return data;
+    return `*${name}*\n\n*Жанр:* ${genre}\n*Размер:* ${size}\n*Раздают:* ${seeders}\n*Инфо хеш:* \`${infoHash}\`\n`;
 }
 
-// Функция поиска и отображения результатов
+// Handle search functionality
 async function handleFindKinozal(chatId, query) {
-    const urlSearch = `https://${process.env.KZ_ADDR}/browse.php?s=${encodeURI(query)}`;
-    await kinozalLogin();
+    const urlSearch = `https://${config.kinozal.address}${config.kinozal.endpoints.search}?s=${encodeURI(query)}`;
+    
     try {
+        await kinozalLogin();
         const response = await client.get(urlSearch, {
             responseType: 'arraybuffer',
             withCredentials: true
@@ -188,8 +323,8 @@ async function handleFindKinozal(chatId, query) {
         const results = [];
         $('div.bx2_0 table.t_peer.w100p tbody tr.bg').each((_, element) => {
             const titleElement = $(element).find('td.nam a');
-            const sizeElement = $(element).find('td.s').eq(1); // Индекс 1 для второго `td` с размером
-            const seedsElement = $(element).find('td.sl_s'); // Колонка с сидерами
+            const sizeElement = $(element).find('td.s').eq(1);
+            const seedsElement = $(element).find('td.sl_s');
 
             let title = titleElement.text().trim();
             const link = titleElement.attr('href');
@@ -199,7 +334,6 @@ async function handleFindKinozal(chatId, query) {
             const kzIdMatch = link ? link.match(/id=(\d+)/) : null;
             const kzId = kzIdMatch ? kzIdMatch[1] : null;
 
-            // Обрезаем название до 30 символов и добавляем "..." в конце, если оно длиннее
             if (title.length > 30) {
                 title = title.slice(0, 30) + '...';
             }
@@ -209,22 +343,14 @@ async function handleFindKinozal(chatId, query) {
             }
         });
 
-        // Сортировка по числу сидов по убыванию
         results.sort((a, b) => b.seeds - a.seeds);
 
         if (results.length > 0) {
             const inlineKeyboard = results.slice(0, 5).map((result, index) => {
-                // Сохранение в sessionData для дальнейшей обработки при загрузке
-                sessionData[`${chatId}_${index}`] = { 
-                    kzId: result.kzId, 
-                    title: result.title,
-                    size: result.size,
-                    seeds: result.seeds 
-                };
-                
-                return [{ 
-                    text: `${result.title} (${result.size}, сидов: ${result.seeds})`, 
-                    callback_data: `download_${chatId}_${index}` 
+                sessionData[`${chatId}_${index}`] = result;
+                return [{
+                    text: `${result.title} (${result.size}, сидов: ${result.seeds})`,
+                    callback_data: `download_${chatId}_${index}`
                 }];
             });
 
@@ -237,145 +363,147 @@ async function handleFindKinozal(chatId, query) {
             bot.sendMessage(chatId, `По запросу "${query}" ничего не найдено.`);
         }
     } catch (error) {
-        logEvent('Error finding Kinozal content.');
-        bot.sendMessage(chatId, 'Произошла ошибка при поиске на Кинозале.');
+        throw new KinozalError('Search failed', {
+            query,
+            originalError: error.message
+        });
     }
 }
 
-// Обработка запроса на подробную информацию о раздаче и добавление кнопки "Скачать"
-bot.on('callback_query', async (callbackQuery) => {
-    const chatId = callbackQuery.message.chat.id;
-    const data = callbackQuery.data;
-
-    if (data.startsWith('download_')) {
-        const [, chatId, index] = data.split('_');
-        const sessionKey = `${chatId}_${index}`;
-        const { kzId, title } = sessionData[sessionKey] || {};
-
-        if (kzId && title) {
-            const urlDetails = `https://${process.env.KZ_ADDR}/details.php?id=${kzId}`;
-            try {
-                const response = await client.get(urlDetails, { responseType: 'arraybuffer', withCredentials: true });
-                const decodedData = iconv.decode(Buffer.from(response.data), 'win1251');
-                const message = await readHtml(decodedData, urlDetails, 'Group');
-
-                const downloadCallbackData = `startdownload_${kzId}`;
-                console.log(downloadCallbackData)
-                const downloadButton = {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: 'Скачать', callback_data: downloadCallbackData }]
-                        ]
-                    }
-                };
-
-                bot.sendMessage(chatId, message, { parse_mode: 'Markdown', ...downloadButton });
-                delete sessionData[sessionKey];
-            } catch (error) {
-                bot.sendMessage(chatId, `Ошибка при получении данных для раздачи ${title}.`);
-                console.error('[ERROR]', error);
-            }
-        } else {
-            bot.sendMessage(chatId, `Ошибка: данные для скачивания не найдены.`);
-        }
-    }
-
-    // Обработка нажатия кнопки "Скачать"
-    if (data.startsWith('startdownload_')) {
-        const [, kzId] = data.split('_');
-        const kzName = `Раздача-${kzId}`;
-        
-        console.log(kzId, kzName, chatId)
-
-        // Скачиваем торрент-файл
-        await downloadTorrent(kzId, kzName, chatId);
-
-        // Создаем кнопки выбора папки для загрузки в Transmission
-        const keyboard = downloadFolders.map(folder => [{
-            text: folder.name,
-            callback_data: `selectfolder_${kzId}_${kzName}_${folder.path}`
-        }]);
-
-        bot.sendMessage(chatId, 'Выберите папку для загрузки:', {
-            reply_markup: {
-                inline_keyboard: keyboard
-            }
-        });
-    }
-
-    // Обработка выбора папки
-    if (data.startsWith('selectfolder_')) {
-        console.log(data)
-        const [, kzId, kzName, ...folderPathParts] = data.split('_');
-        const folderPath = folderPathParts.join('_');
-
-        const torrentFilePath = path.join(__dirname, 'torrent_files', `${kzId}.torrent`);
-        console.log(torrentFilePath)
-        if (!fs.existsSync(torrentFilePath)) {
-            bot.sendMessage(chatId, `Торрент-файл не найден. Пожалуйста, скачайте его заново.`);
+// Bot command handlers
+bot.onText(/\/find (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    try {
+        // Check access before processing command
+        if (!await accessMiddleware.checkAccess(userId, chatId)) {
             return;
         }
-
-        // Добавляем торрент в Transmission
-        transmission.addFile(torrentFilePath, { 'download-dir': folderPath }, (err, result) => {
-            if (err) {
-                bot.sendMessage(chatId, `Ошибка при добавлении в Transmission: ${err.message}`);
-                logEvent(`Error adding torrent to Transmission: ${err.message}`);
-            } else {
-                bot.sendMessage(chatId, `Торрент ${kzName} добавлен в Transmission и будет загружен в папку "${folderPath}".`);
-                logEvent(`Torrent ${kzName} added to Transmission.`);
-            }
-        });
+        
+        await handleFindKinozal(chatId, match[1]);
+    } catch (error) {
+        await errorHandler.handle(error, bot, chatId);
     }
 });
 
+// Callback query handler
+bot.on('callback_query', async (callbackQuery) => {
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    const data = callbackQuery.data;
 
-// Команда /find для поиска на Кинозале
-bot.onText(/\/find (.+)/, (msg, match) => {
-    const chatId = msg.chat.id;
-    const query = match[1];
-    handleFindKinozal(chatId, query);
-});
-
-// Команда для загрузки торрент-файла по ID раздачи
-bot.onText(/\/download (\d+) (.+)/, (msg, match) => {
-    const chatId = msg.chat.id;
-    const kzId = match[1];
-    const kzName = match[2];
-    downloadTorrent(kzId, kzName, chatId);
-});
-
-// Подключение к Transmission
-const transmission = new Transmission({
-    host: process.env.TRANS_ADDR,
-    port: 9091,
-    username: process.env.TRANS_USER,
-    password: process.env.TRANS_PASS
-});
-
-// Список доступных папок для загрузки
-const downloadFolders = [
-    { name: "Фильмы", path: process.env.FILMS_FOLDER },
-    { name: "Сериалы", path: process.env.SERIES_FOLDER },
-    { name: "Сериалы", path: process.env.AUDIOBOOKS_FOLDER }
-];
-
-// Команда для добавления в Transmission с выбором папки
-bot.onText(/\/add_transmission (\d+) (.+)/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    const kzId = match[1];
-    const kzName = match[2];
-
-    const keyboard = downloadFolders.map(folder => [{
-        text: folder.name,
-        callback_data: `/select_folder ${kzId} ${kzName} ${folder.path}`
-    }]);
-
-    bot.sendMessage(chatId, 'Выберите папку для загрузки:', {
-        reply_markup: {
-            inline_keyboard: keyboard
+    try {
+        if (!await accessMiddleware.checkAccess(userId, chatId)) {
+            return;
         }
-    });
+        if (data.startsWith('download_')) {
+            const [, chatId, index] = data.split('_');
+            const sessionKey = `${chatId}_${index}`;
+            const { kzId, title } = sessionData[sessionKey] || {};
+
+            if (!kzId || !title) {
+                throw new BotError('Invalid session data', 'SESSION_ERROR', { sessionKey });
+            }
+
+            const urlDetails = `https://${config.kinozal.address}${config.kinozal.endpoints.details}?id=${kzId}`;
+            const response = await client.get(urlDetails, {
+                responseType: 'arraybuffer',
+                withCredentials: true
+            });
+
+            const decodedData = iconv.decode(Buffer.from(response.data), 'win1251');
+            const message = await readHtml(decodedData, urlDetails, 'Group');
+
+            const downloadCallbackData = `startdownload_${kzId}`;
+            const downloadButton = {
+                reply_markup: {
+                    inline_keyboard: [[{ text: 'Скачать', callback_data: downloadCallbackData }]]
+                }
+            };
+
+            await bot.sendMessage(chatId, message, {
+                parse_mode: 'Markdown',
+                ...downloadButton
+            });
+            delete sessionData[sessionKey];
+        }
+
+        else if (data.startsWith('startdownload_')) {
+            const [, kzId] = data.split('_');
+            const kzName = `Раздача-${kzId}`;
+            
+            const torrentPath = await downloadTorrent(kzId, kzName, chatId);
+            const keyboard = downloadFolders.map(folder => [{
+                text: folder.name,
+                callback_data: `selectfolder_${kzId}_${kzName}_${folder.path}`
+            }]);
+
+            await bot.sendMessage(chatId, 'Выберите папку для загрузки:', {
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            });
+        }
+
+        else if (data.startsWith('selectfolder_')) {
+            const [, kzId, kzName, ...folderPathParts] = data.split('_');
+            const folderPath = folderPathParts.join('_');
+
+            await addToTransmission(
+                path.join(config.folders.torrents, `${kzId}.torrent`),
+                folderPath,
+                chatId,
+                kzName
+            );
+        }
+    } catch (error) {
+        await errorHandler.handle(error, bot, chatId);
+    }
 });
 
-console.log('Bot is running...');
+// Startup validation
+async function startup() {
+    try {
+        // Validate configuration
+        config.validate();
+        logger.info('Configuration validated successfully');
+
+        // Setup bot commands and handlers
+        await setupBotCommands(bot);
+        handleStart(bot, config);
+        handleHelp(bot, config);
+
+        // Test Transmission connection
+        await new Promise((resolve, reject) => {
+            transmission.sessionStats((error, result) => {
+                if (error) reject(error);
+                else resolve(result);
+            });
+        });
+        logger.info('Transmission connection tested successfully');
+
+        // Log access control configuration
+        logger.info('Access control configured:', {
+            adminId: config.bot.adminId,
+            allowedUsers: config.bot.allowedUsers
+        });
+
+        logger.info('Bot startup complete');
+    } catch (error) {
+        logger.error('Startup failed:', error);
+        process.exit(1);
+    }
+}
+setupUserManagement(bot, config, logger);
+startup();
+
+// Export for testing
+module.exports = {
+    bot,
+    client,
+    transmission,
+    handleFindKinozal,
+    downloadTorrent,
+    addToTransmission
+};
