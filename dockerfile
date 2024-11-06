@@ -16,8 +16,6 @@ COPY . .
 # Production stage
 FROM node:20-alpine
 
-# Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Set working directory
 WORKDIR /app
@@ -35,15 +33,11 @@ COPY --from=builder /app/userManagement.js ./
 COPY --from=builder /app/menu.js ./
 COPY --from=builder /app/package*.json ./
 
-# Set proper ownership after copying files
-RUN chown -R appuser:appgroup /app
 
 # Set environment variables
 ENV NODE_ENV=production \
     TZ=UTC
 
-# Switch to non-root user
-USER appuser
 
 # Health check using transmission RPC
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
