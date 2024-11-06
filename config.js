@@ -33,7 +33,7 @@ class Config {
 
         this.folders = {
             // Default paths can be overridden by environment variables
-            torrents: process.env.TORRENTS_PATH || path.join(process.cwd(), 'torrents'),
+            torrents: path.join(process.cwd(), 'torrents'),
             films: process.env.FILMS_FOLDER || path.join(process.cwd(), 'downloads', 'films'),
             series: process.env.SERIES_FOLDER || path.join(process.cwd(), 'downloads', 'series'),
             audiobooks: process.env.AUDIOBOOKS_FOLDER || path.join(process.cwd(), 'downloads', 'audiobooks')

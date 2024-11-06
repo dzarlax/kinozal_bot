@@ -57,7 +57,6 @@ services:
       - TRANSMISSION_PASSWORD=your_transmission_password
       
       # Paths Configuration
-      - TORRENTS_PATH=/downloads/torrents
       - FILMS_PATH=/downloads/films
       - SERIES_PATH=/downloads/series
       - AUDIOBOOKS_PATH=/downloads/audiobooks

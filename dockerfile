@@ -20,6 +20,9 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /app
 
+# Create folder for torrents
+RUN mkdir torrents
+
 # Copy application files from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/node.js ./
@@ -32,6 +35,7 @@ COPY --from=builder /app/middleware.js ./
 COPY --from=builder /app/userManagement.js ./
 COPY --from=builder /app/menu.js ./
 COPY --from=builder /app/package*.json ./
+
 
 
 # Set environment variables

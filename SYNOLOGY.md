@@ -68,7 +68,6 @@ services:
       - TRANSMISSION_PASSWORD=your_transmission_password
       
       # Paths Configuration (use your Transmission paths or Plex folders)
-      - TORRENTS_PATH=/volume1/downloads/transmission/torrents
       - FILMS_PATH=/volume1/downloads/transmission/films
       - SERIES_PATH=/volume1/downloads/transmission/tv
       - AUDIOBOOKS_PATH=/volume1/downloads/transmission/audio
