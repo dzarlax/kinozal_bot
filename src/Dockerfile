@@ -5,13 +5,13 @@ FROM golang:1.23-alpine as builder
 WORKDIR /app
 
 # Copy go.mod and go.sum files to download dependencies
-COPY src/go.mod src/go.sum ./
+COPY ./src/go.mod ./src/go.sum ./
 
 # Download dependencies
 RUN go mod tidy
 
 # Copy the rest of the application source code into the container
-COPY src/ .
+COPY ./src/ .
 
 # Build the Go app for Linux
 RUN GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux main.go
