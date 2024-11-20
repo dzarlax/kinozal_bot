@@ -1,7 +1,9 @@
-name: Build and Release Docker Image
+name: Build and Release Binaries
 
 on:
   push:
+    tags:
+      - 'v*'  # Trigger on version tags, e.g., v1.0.0, v2.1.3
 
 jobs:
   build:
@@ -14,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.23'
+          go-version: '1.23'  # Specify the Go version you want to use
 
       - name: Cache Go modules
         uses: actions/cache@v2
@@ -23,41 +25,32 @@ jobs:
           key: ${{ runner.os }}-go-modules-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-modules-
-
+            
       - name: Install dependencies
         run: |
           cd src
           go mod tidy
 
-      - name: Build Go binary for Linux
+      - name: Build binaries using Makefile
         run: |
           cd src
-          GOOS=linux GOARCH=amd64 go build -o kinozalbot-linux main.go
-          
-          # Check if the binary is built correctly
-          ls -l kinozalbot-linux
+          make build-all
 
-      - name: Build Docker image for Linux
+      - name: Archive and prepare binaries for release
         run: |
-          cd src
-          # Ensure the binary is in the current directory
-          ls -l kinozalbot-linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile .
+          # Create a release archive for Linux
+          zip kinozal-bot-linux.zip src/kinozal-bot-linux .env.example README.md
+          # Create a release archive for macOS
+          zip kinozal-bot-darwin.zip src/kinozal-bot-darwin .env.example README.md
+          # Create a release archive for Windows (using Linux zip)
+          zip kinozal-bot-windows.zip src/kinozal-bot.exe .env.example README.md
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+      - name: Create a GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push Docker image to Docker Hub
-        run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA}
-
-      - name: Tag Docker image with 'latest'
-        run: |
-          docker tag ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
-
-      - name: Push 'latest' tag to Docker Hub
-        run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
+          files: |
+            kinozal-bot-linux.zip
+            kinozal-bot-darwin.zip
+            kinozal-bot-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

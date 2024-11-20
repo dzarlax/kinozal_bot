@@ -33,12 +33,16 @@ jobs:
         run: |
           cd src
           GOOS=linux GOARCH=amd64 go build -o kinozalbot-linux main.go
+          
+          # Check if the binary is built correctly
+          ls -l kinozalbot-linux
 
       - name: Build Docker image for Linux
         run: |
+          cd src
           # Ensure the binary is in the current directory
-          ls -l src/kinozalbot-linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile src/
+          ls -l kinozalbot-linux
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile .
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
