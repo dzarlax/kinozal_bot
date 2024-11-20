@@ -52,3 +52,5 @@ jobs:
             kinozal-bot-linux.zip
             kinozal-bot-darwin.zip
             kinozal-bot-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
