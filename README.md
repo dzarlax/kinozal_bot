@@ -1,208 +1,142 @@
-# Kinozal Bot 🤖
+# Kinozal-Bot
 
-Telegram bot for downloading torrents from Kinozal.tv with automatic integration with Transmission.
+Kinozal-Bot is a Telegram bot that allows users to search for, download, and manage torrents from Kinozal.tv. The bot integrates with Telegram, Kinozal, and Transmission for convenient torrent downloading and management directly from the chat interface.
 
-## Features
+## Table of Contents
+1. [Project Description](#project-description)
+2. [Installation](#installation)
+   - [Using Binary Executables](#using-binary-executables)
+   - [Using Docker](#using-docker)
+3. [Commands](#commands)
+4. [Usage](#usage)
+5. [License](#license)
 
-- 🔍 Search torrents on Kinozal
-- 📥 Automatic torrent file downloading
-- 🚀 Transmission integration
-- 👥 User access control system
-- 📂 Organized downloads (movies, TV shows, audiobooks)
-- 🔐 Secure credentials storage
-- 🐳 Docker support
+## Project Description
+Kinozal-Bot allows you to:
+- Search for torrents on Kinozal.tv.
+- Download torrents directly to specified directories.
+- Manage users: add and remove users who are allowed to use the bot.
+- Integrate with Transmission for torrent management.
+- Works on Linux, Windows, and macOS.
 
-## Installation on Synology
-Is [here](SYNOLOGY.md)
+## Installation
 
-## Prerequisites
+### Using Binary Executables
 
-- Docker & Docker Compose
-- Kinozal.tv account
-- Telegram Bot Token
+1. Download the compiled binary for your operating system:
+   - [Kinozal-Bot for macOS](#)
+   - [Kinozal-Bot for Windows](#)
+   - [Kinozal-Bot for Linux](#)
 
-## Configuration & Installation
+2. Extract the file if it is in an archive.
 
-1. Create a directory for your project:
-```bash
-mkdir kinozal-bot && cd kinozal-bot
-mkdir -p downloads/{torrents,films,series,audiobooks}
-```
+3. Ensure that the `.env` file is located in the same directory. If it is missing, create a `.env` file with the contents as shown below.
+ Example `.env` file:
+    ```env
+    TG_TOKEN=<PASSWORD>:<PASSWORD>
+    BOT_ADMIN_ID=<1234567890>
+    BOT_ALLOWED_USERS=<1234567890,1234567891>
+    KZ_ADDR="kinozal.tv"
+    KZ_USER=<username>
+    KZ_PASS=<PASSWORD>
+    TRANS_ADDR=<http://localhost:9091/transmission/rpc>
+    TRANS_USER=user
+    TRANS_PASS=<PASSWORD>
+    FILMS_FOLDER=</path/to/films>
+    SERIES_FOLDER=</path/to/series>
+    AUDIOBOOKS_FOLDER=</path/to/audiobooks > 
+    ```
 
-2. Create `docker-compose.yml`:
+4. Run the binary:
+   - On macOS or Linux:
+     ```bash
+     ./kinozal-bot-darwin
+     ```
+   - On Windows:
+     ```bash
+     kinozal-bot.exe
+     ```
 
-```yaml
-version: '3.8'
+### Using Docker
 
-services:
-  kinozal-bot:
-    image: dzarlax/kinozalbot:latest
-    container_name: kinozal-bot
-    restart: unless-stopped
-    environment:
-      # Telegram Configuration
-      - TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-      - BOT_ADMIN_ID=your_telegram_id
-      - BOT_ALLOWED_USERS=user_id_1,user_id_2,user_id_3
-      
-      # Kinozal Configuration
-      - KINOZAL_ADDRESS=kinozal.tv
-      - KINOZAL_USERNAME=your_username
-      - KINOZAL_PASSWORD=your_password
-      
-      # Transmission Configuration
-      - TRANSMISSION_HOST=transmission
-      - TRANSMISSION_PORT=9091
-      - TRANSMISSION_USERNAME=your_transmission_username
-      - TRANSMISSION_PASSWORD=your_transmission_password
-      
-      # Paths Configuration
-      - FILMS_PATH=/downloads/films
-      - SERIES_PATH=/downloads/series
-      - AUDIOBOOKS_PATH=/downloads/audiobooks
-    volumes:
-      - ./downloads:/downloads
-    depends_on:
-      - transmission
-    networks:
-      - torrent-network
+If you prefer to use Docker, follow these steps:
 
-  transmission:
-    image: linuxserver/transmission
-    container_name: transmission
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
-      - USER=your_transmission_username
-      - PASS=your_transmission_password
-    volumes:
-      - ./downloads:/downloads
-    ports:
-      - "9091:9091"
-      - "51413:51413"
-      - "51413:51413/udp"
-    restart: unless-stopped
-    networks:
-      - torrent-network
+1. Ensure Docker is installed on your machine. If not, download and install it from the [official Docker website](https://www.docker.com/get-started).
 
-networks:
-  torrent-network:
-    driver: bridge
-```
+2. Create a `docker-compose.yml` file (if it doesn’t exist) with the following content:
 
-3. Get your Telegram Bot Token:
-   - Start chat with @BotFather in Telegram
-   - Send `/newbot` command
-   - Follow the instructions
-   - Copy the token
+   ```yaml
+   version: "3.8"
 
-4. Get your Telegram ID:
-   - Start chat with @userinfobot in Telegram
-   - It will show your user ID
-   - Use this as BOT_ADMIN_ID
+   services:
+     bot:
+       image: dzarlax/kinozalbot:latest
+       container_name: kinozal_bot
+       environment:
+         TG_TOKEN: ${TG_TOKEN}  # Secret Telegram token
+         BOT_ADMIN_ID: ${BOT_ADMIN_ID}  # Admin ID
+         BOT_ALLOWED_USERS: ${BOT_ALLOWED_USERS}  # Allowed user IDs
+         KZ_ADDR: "kinozal.tv"  # Kinozal address
+         KZ_USER: ${KZ_USER}  # Kinozal username
+         KZ_PASS: ${KZ_PASS}  # Kinozal password
+         TRANS_ADDR: ${TRANS_ADDR}  # Transmission address
+         TRANS_USER: ${TRANS_USER}  # Transmission username
+         TRANS_PASS: ${TRANS_PASS}  # Transmission password
+         FILMS_FOLDER: ${FILMS_FOLDER}   # Films folder
+         SERIES_FOLDER: ${SERIES_FOLDER}   # Series folder
+         AUDIOBOOKS_FOLDER: ${AUDIOBOOKS_FOLDER}    # Audiobooks folder
+         
+       restart: unless-stopped
+    ```
+   
 
-5. Start the services:
-```bash
-docker-compose up -d
-```
+   Replace the values in `${}` with your own credentials or create a `.env` file with these values near the `docker-compose.yml` file.
+
+   Example `.env` file:
+    ```env
+    TG_TOKEN=<PASSWORD>:<PASSWORD>
+    BOT_ADMIN_ID=1234567890
+    BOT_ALLOWED_USERS=1234567890,1234567891
+    KZ_ADDR="kinozal.tv"
+    KZ_USER=username
+    KZ_PASS=<PASSWORD>
+    TRANS_ADDR=http://localhost:9091/transmission/rpc
+    TRANS_USER=user
+    TRANS_PASS=<PASSWORD>
+    FILMS_FOLDER=/path/to/films
+    SERIES_FOLDER=/path/to/series
+    AUDIOBOOKS_FOLDER=/path/to/audiobooks  
+    ```
+
+3. Run `docker-compose up -d` to start the container.
+
+4. To stop the container, run `docker-compose down`.
+
+	5.	The bot will be running inside the container and accessible via Telegram.
+
+## Commands
+
+Once the bot is up and running, you can use the following commands in Telegram:
+	•	/start: Start the bot and receive a welcome message.
+	•	/find [query]: Search for torrents on Kinozal.tv by name.
+	•	/adduser [user_id]: Add a user to the allowed list (admins only).
+	•	/removeuser [user_id]: Remove a user from the allowed list (admins only).
+	•	/listusers: Display all allowed users (admins only).
+	•	/help: Get a list of available commands.
 
 ## Usage
 
-### Basic Commands
+### Searching and Downloading Torrents
 
-- `/start` - Start the bot
-- `/help` - Show help
-- `/find <query>` - Search for torrents
+	1.	Use the /find [query] command to search for torrents on Kinozal.tv.
+	2.	The bot will display a list of results with download buttons.
+	3.	Select a torrent, and the bot will prompt you to choose a folder for downloading (e.g., Films, Series, Audiobooks).
 
-### Admin Commands
+### User Management
 
-- `/adduser <id>` - Add a user
-- `/removeuser <id>` - Remove a user
-- `/listusers` - List allowed users
-
-### Search Examples
-
-- Movies: `/find Matrix 1999`
-- TV Shows: `/find Game of Thrones S01`
-- With quality: `/find Dune 2021 4K`
-
-## Directory Structure
-
-```
-kinozal-bot/
-├── docker-compose.yml
-└── downloads/
-    ├── torrents/
-    ├── films/
-    ├── series/
-    └── audiobooks/
-```
-
-## Updating
-
-To update to the latest version:
-
-```bash
-docker-compose pull
-docker-compose up -d
-```
-
-## Troubleshooting
-
-### View Logs
-```bash
-# View bot logs
-docker logs kinozal-bot
-
-# View Transmission logs
-docker logs transmission
-
-# Follow logs in real-time
-docker logs -f kinozal-bot
-```
-
-### Common Issues
-
-1. Bot can't connect to Transmission:
-   - Check if both containers are running: `docker-compose ps`
-   - Verify Transmission credentials in docker-compose.yml
-   - Check if containers are in the same network
-
-2. Download issues:
-   - Check volume permissions: `ls -l downloads/`
-   - Verify Transmission settings in web interface (localhost:9091)
-   - Check container logs
-
-3. Kinozal login fails:
-   - Verify Kinozal credentials in docker-compose.yml
-   - Check if Kinozal.tv is accessible
-   - View logs for detailed error messages
-
-## Security Recommendations
-
-- Use strong passwords
-- Don't expose Transmission port 9091 to the internet
-- Regularly update Docker images
-- Use user access control feature
-- Keep docker-compose.yml secure (it contains sensitive data)
-
-## Support
-
-If you encounter any issues:
-
-1. Check the [Troubleshooting](#troubleshooting) section
-2. Look through the logs
-3. Create an issue in the repository
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+	1.	Administrators can manage bot access with the commands /adduser, /removeuser, and /listusers.
+	2.	Only users with admin privileges can use these commands.
 
 ## License
 
-MIT License. See LICENSE file for details.
+This project is licensed under the MIT License.
