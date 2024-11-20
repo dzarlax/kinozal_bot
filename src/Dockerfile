@@ -11,4 +11,4 @@ COPY kinozal-bot-linux .
 EXPOSE 8080
 
 # Command to run the binary when the container starts
-CMD ["./kinozal-bot-linux"]
+CMD ["./kinozalbot-linux"]
