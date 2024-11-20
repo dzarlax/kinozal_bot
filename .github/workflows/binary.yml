@@ -39,9 +39,10 @@ jobs:
 
       - name: Build Docker image for Linux
         run: |
+          cd src
           # Ensure the binary is in the current directory
-          ls -l src/kinozalbot-linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile src/
+          ls -l kinozalbot-linux
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile .
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
