@@ -33,11 +33,11 @@ jobs:
       - name: Build binaries for multiple platforms
         run: |
           # Build for Linux
-          GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux main.go
+          GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux src/main.go
           # Build for Windows
-          GOOS=windows GOARCH=amd64 go build -o kinozal-bot.exe main.go
+          GOOS=windows GOARCH=amd64 go build -o kinozal-bot.exe src/main.go
           # Build for macOS
-          GOOS=darwin GOARCH=arm64 go build -o kinozal-bot-darwin main.go
+          GOOS=darwin GOARCH=arm64 go build -o kinozal-bot-darwin src/main.go
 
       - name: Archive and prepare binaries for release
         run: |
@@ -53,3 +53,5 @@ jobs:
             kinozal-bot-linux.zip
             kinozal-bot-darwin.zip
             kinozal-bot-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
