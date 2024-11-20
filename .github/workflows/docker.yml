@@ -32,13 +32,13 @@ jobs:
       - name: Build Go binary for Linux
         run: |
           cd src
-          GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux main.go
+          GOOS=linux GOARCH=amd64 go build -o kinozalbot-linux main.go
 
       - name: Build Docker image for Linux
         run: |
           # Ensure the binary is in the current directory
-          ls -l src/kinozal-bot-linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} -f src/Dockerfile src/
+          ls -l src/kinozalbot-linux
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} -f src/Dockerfile src/
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -48,12 +48,12 @@ jobs:
 
       - name: Push Docker image to Docker Hub
         run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA}
+          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA}
 
       - name: Tag Docker image with 'latest'
         run: |
-          docker tag ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest
+          docker tag ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
 
       - name: Push 'latest' tag to Docker Hub
         run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
