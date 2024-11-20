@@ -2,7 +2,7 @@
 FROM alpine:latest
 
 # Set the working directory inside the container
-WORKDIR /root/
+WORKDIR /root
 
 # Copy the pre-built Go binary from the build
 COPY kinozalbot-linux .
