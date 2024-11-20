@@ -7,6 +7,8 @@ WORKDIR /root
 # Copy the pre-built Go binary from the build
 COPY kinozalbot-linux .
 
+RUN ls
+
 # Ensure the binary has executable permissions
 RUN chmod +x /root/kinozalbot-linux
 
