@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.23'  # Specify the Go version you want to use
+          go-version: '1.20'  # Specify the Go version you want to use
 
       - name: Cache Go modules
         uses: actions/cache@v2
@@ -28,24 +28,22 @@ jobs:
             
       - name: Install dependencies
         run: |
-          # Navigate to the src directory
           cd src
-          # Install Go dependencies
           go mod tidy
 
       - name: Build binaries using Makefile
         run: |
-          # Navigate to the src directory
           cd src
-          # Run the make command to build binaries
           make build-all
 
       - name: Archive and prepare binaries for release
         run: |
-          # Create a release archive for Linux, macOS, and Windows
+          # Create a release archive for Linux
           zip kinozal-bot-linux.zip src/kinozal-bot-linux .env.example README.md
+          # Create a release archive for macOS
           zip kinozal-bot-darwin.zip src/kinozal-bot-darwin .env.example README.md
-          powershell Compress-Archive -Path src/kinozal-bot.exe, .env.example, README.md -DestinationPath kinozal-bot-windows.zip
+          # Create a release archive for Windows (using Linux zip)
+          zip kinozal-bot-windows.zip src/kinozal-bot.exe .env.example README.md
 
       - name: Create a GitHub Release
         uses: softprops/action-gh-release@v1
