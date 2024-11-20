@@ -36,7 +36,6 @@ jobs:
 
       - name: Build Docker image
         run: |
-          cd src
           # Build Docker image for Linux
           docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} src
 
