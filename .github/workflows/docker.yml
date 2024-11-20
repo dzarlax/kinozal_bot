@@ -1,4 +1,4 @@
-name: Build, Dockerize, and Push to Docker Hub
+name: Build and Release with Docker
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.23'  # Specify the Go version you want to use
+          go-version: '1.23'
 
       - name: Cache Go modules
         uses: actions/cache@v2
@@ -29,15 +29,14 @@ jobs:
           cd src
           go mod tidy
 
-      - name: Build Linux binary
+      - name: Build Go binary for Linux
         run: |
           cd src
           GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux main.go
 
       - name: Build Docker image
         run: |
-          # Build Docker image for Linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} src
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} -f src/Dockerfile .
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -47,15 +46,12 @@ jobs:
 
       - name: Push Docker image to Docker Hub
         run: |
-          # Push Docker image to Docker Hub
           docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA}
 
       - name: Tag Docker image with 'latest'
         run: |
-          # Tag the image with 'latest'
           docker tag ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest
 
       - name: Push 'latest' tag to Docker Hub
         run: |
-          # Push the 'latest' tag to Docker Hub
           docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest
