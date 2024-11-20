@@ -5,7 +5,7 @@ FROM alpine:latest
 WORKDIR /root/
 
 # Copy the pre-built Go binary from the build
-COPY kinozal-bot-linux .
+COPY kinozalbot-linux .
 
 # Optionally expose port (if required)
 EXPOSE 8080
