@@ -28,23 +28,24 @@ jobs:
             
       - name: Install dependencies
         run: |
+          # Navigate to the src directory
+          cd src
+          # Install Go dependencies
           go mod tidy
 
-      - name: Build binaries for multiple platforms
+      - name: Build binaries using Makefile
         run: |
-          # Build for Linux
-          GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux src/main.go
-          # Build for Windows
-          GOOS=windows GOARCH=amd64 go build -o kinozal-bot.exe src/main.go
-          # Build for macOS
-          GOOS=darwin GOARCH=arm64 go build -o kinozal-bot-darwin src/main.go
+          # Navigate to the src directory
+          cd src
+          # Run the make command to build binaries
+          make build-all
 
       - name: Archive and prepare binaries for release
         run: |
           # Create a release archive for Linux, macOS, and Windows
-          zip kinozal-bot-linux.zip kinozal-bot-linux .env.example README.md
-          zip kinozal-bot-darwin.zip kinozal-bot-darwin .env.example README.md
-          powershell Compress-Archive -Path kinozal-bot.exe, .env.example, README.md -DestinationPath kinozal-bot-windows.zip
+          zip kinozal-bot-linux.zip src/kinozal-bot-linux .env.example README.md
+          zip kinozal-bot-darwin.zip src/kinozal-bot-darwin .env.example README.md
+          powershell Compress-Archive -Path src/kinozal-bot.exe, .env.example, README.md -DestinationPath kinozal-bot-windows.zip
 
       - name: Create a GitHub Release
         uses: softprops/action-gh-release@v1
@@ -53,5 +54,3 @@ jobs:
             kinozal-bot-linux.zip
             kinozal-bot-darwin.zip
             kinozal-bot-windows.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
