@@ -36,8 +36,9 @@ jobs:
 
       - name: Build Docker image
         run: |
+          cd src
           # Build Docker image for Linux
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} src
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -48,14 +49,14 @@ jobs:
       - name: Push Docker image to Docker Hub
         run: |
           # Push Docker image to Docker Hub
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA}
+          docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA}
 
       - name: Tag Docker image with 'latest'
         run: |
           # Tag the image with 'latest'
-          docker tag ${{ secrets.DOCKER_USERNAME }}/kinozalbot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
+          docker tag ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:${GITHUB_SHA} ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest
 
       - name: Push 'latest' tag to Docker Hub
         run: |
           # Push the 'latest' tag to Docker Hub
-          docker push ${{ secrets.DOCKER_USERNAME }}/kinozalbot:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/kinozal-bot:latest

@@ -1,31 +1,32 @@
-# Use a base image for building (Alpine is a lightweight base image)
+# Stage 1: Build the Go binary
 FROM golang:1.23-alpine as builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
-# Copy the Go modules manifests
-COPY go.mod go.sum ./
+# Copy go.mod and go.sum files to download dependencies
+COPY src/go.mod src/go.sum ./
 
-# Download all the dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+# Download dependencies
 RUN go mod tidy
 
-# Copy the source code into the container
-COPY . .
+# Copy the rest of the application source code into the container
+COPY src/ .
 
-# Build the Go app
+# Build the Go app for Linux
 RUN GOOS=linux GOARCH=amd64 go build -o kinozal-bot-linux main.go
 
-# Start a new stage from scratch (smaller image)
+# Stage 2: Create a smaller image for runtime
 FROM alpine:latest
 
+# Set the working directory inside the container
 WORKDIR /root/
 
-# Copy the pre-built binary from the previous stage
+# Copy the pre-built binary from the builder stage
 COPY --from=builder /app/kinozal-bot-linux .
 
-# Expose the port (optional)
+# Optionally expose port (e.g., for HTTP server)
 EXPOSE 8080
 
-# Run the binary
+# Command to run the binary when the container starts
 CMD ["./kinozal-bot-linux"]
