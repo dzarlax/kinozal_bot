@@ -117,12 +117,14 @@ If you prefer to use Docker, follow these steps:
 ## Commands
 
 Once the bot is up and running, you can use the following commands in Telegram:
+```
 	•	/start: Start the bot and receive a welcome message.
 	•	/find [query]: Search for torrents on Kinozal.tv by name.
 	•	/adduser [user_id]: Add a user to the allowed list (admins only).
 	•	/removeuser [user_id]: Remove a user from the allowed list (admins only).
 	•	/listusers: Display all allowed users (admins only).
 	•	/help: Get a list of available commands.
+   ```
 
 ## Usage
 
