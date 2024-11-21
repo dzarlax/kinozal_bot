@@ -49,7 +49,7 @@ type Config struct {
 	}
 }
 
-const UsersFilePath = "/config/users.json"
+const UsersFilePath = "config/users.json"
 
 // LoadConfig загружает конфигурацию из .env
 func LoadConfig() (*Config, error) {
