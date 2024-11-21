@@ -32,7 +32,7 @@ jobs:
       - name: Build Go binary for Linux
         run: |
           cd src
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o kinozalbot-linux main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -tags timetzdata -ldflags '-extldflags "-static"' -o kinozalbot-linux main.go
           
           # Check if the binary is built correctly
           ls -l kinozalbot-linux

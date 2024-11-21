@@ -3,7 +3,7 @@ RUN apk add --no-cache libc6-compat
 
 # Stage 1: Use a lightweight image as base
 FROM scratch
-
+COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Install necessary runtime dependencies
 
 
