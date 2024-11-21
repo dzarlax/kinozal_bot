@@ -1,8 +1,11 @@
+FROM alpine:latest as alpine
+RUN apk add --no-cache libc6-compat
+
 # Stage 1: Use a lightweight image as base
 FROM scratch
 
 # Install necessary runtime dependencies
-RUN apk add --no-cache libc6-compat
+
 
 # Set the working directory inside the container
 WORKDIR /root
