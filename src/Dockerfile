@@ -1,5 +1,5 @@
 # Stage 1: Use a lightweight image as base
-FROM alpine:latest
+FROM scratch
 
 # Install necessary runtime dependencies
 RUN apk add --no-cache libc6-compat
