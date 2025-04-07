@@ -1,6 +1,8 @@
 module kinozal-bot
 
-go 1.23.3
+go 1.23
+
+toolchain go1.23.3
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.0
