@@ -202,7 +202,8 @@ func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]Se
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	// Remove Accept-Encoding header to prevent gzip compression issues
+	// req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Upgrade-Insecure-Requests", "1")
 	req.Header.Set("Sec-Fetch-Dest", "document")
@@ -482,21 +483,74 @@ func ParseSearchResults(html string) []SearchResult {
 		return results
 	}
 
-	// Log the number of rows found
+	// Log detailed HTML structure for debugging
+	logger.Debug("HTML structure analysis", map[string]interface{}{
+		"html_length": len(html),
+		"title":       doc.Find("title").Text(),
+	})
+
+	// Look for different possible table structures
+	tableSelectors := []string{
+		"tr.bg",           // Original selector
+		"tr[class*='bg']", // Any class containing 'bg'
+		"tr.row",          // Alternative class name
+		"tr[style]",       // Rows with inline styles
+		"table tr",        // Any table rows
+		".torrent-row",    // Common torrent site pattern
+		".torrent",        // Another common pattern
+	}
+
+	for _, selector := range tableSelectors {
+		rowCount := doc.Find(selector).Length()
+		logger.Debug("Testing selector", map[string]interface{}{
+			"selector": selector,
+			"count":    rowCount,
+		})
+		
+		if rowCount > 0 {
+			// Log first few elements for analysis
+			doc.Find(selector).Each(func(i int, s *goquery.Selection) {
+				if i < 3 { // Only log first 3 for brevity
+					html, _ := s.Html()
+					logger.Debug("Row HTML sample", map[string]interface{}{
+						"index":    i,
+						"selector": selector,
+						"html":     html[:min(200, len(html))],
+					})
+				}
+			})
+		}
+	}
+
+	// Log the number of rows found with original selector
 	rowCount := doc.Find("tr.bg").Length()
 	logger.Debug("Found rows in search results", map[string]interface{}{
 		"count": rowCount,
 	})
 
 	if rowCount == 0 {
-		// If no rows found, log a sample of the HTML to help diagnose the issue
+		// If no rows found, log more detailed HTML sample
 		htmlPreview := html
-		if len(htmlPreview) > 500 {
-			htmlPreview = htmlPreview[:500] + "..."
+		if len(htmlPreview) > 1000 {
+			htmlPreview = htmlPreview[:1000] + "..."
 		}
-		logger.Debug("No rows found in HTML, preview:", map[string]interface{}{
+		logger.Debug("No rows found in HTML, detailed preview:", map[string]interface{}{
 			"html_preview": htmlPreview,
 		})
+		
+		// Try to find any table structures
+		doc.Find("table").Each(func(i int, table *goquery.Selection) {
+			tableHtml, _ := table.Html()
+			if len(tableHtml) > 500 {
+				tableHtml = tableHtml[:500] + "..."
+			}
+			logger.Debug("Found table", map[string]interface{}{
+				"table_index": i,
+				"table_html":  tableHtml,
+			})
+		})
+		
+		return results
 	}
 
 	doc.Find("tr.bg").Each(func(index int, row *goquery.Selection) {
@@ -565,6 +619,14 @@ func ParseSearchResults(html string) []SearchResult {
 	})
 
 	return results
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // extractIDFromHref extracts the torrent ID from the href attribute
