@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -18,6 +20,13 @@ import (
 	"kinozal-bot/torrent"
 	"kinozal-bot/transmission"
 	"kinozal-bot/usermanagement"
+)
+
+// Rate limiting for user requests
+var (
+	userLastRequest = make(map[int64]time.Time)
+	userRequestMutex = sync.RWMutex{}
+	requestCooldown = 10 * time.Second // 10 seconds cooldown between requests
 )
 
 // TelegramBotWrapper реализует интерфейс transmission.BotInterface
@@ -134,6 +143,7 @@ func main() {
 
 func handleFind(bot *tgbotapi.BotAPI, cfg *config.Config, eh *errorhandler.ErrorHandler, update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
+	userID := update.Message.From.ID
 	query := update.Message.CommandArguments()
 
 	if query == "" {
@@ -141,22 +151,72 @@ func handleFind(bot *tgbotapi.BotAPI, cfg *config.Config, eh *errorhandler.Error
 		return
 	}
 
+	// Check rate limiting
+	userRequestMutex.RLock()
+	lastRequest, exists := userLastRequest[int64(userID)]
+	userRequestMutex.RUnlock()
+	
+	if exists {
+		timeSinceLastRequest := time.Since(lastRequest)
+		if timeSinceLastRequest < requestCooldown {
+			remainingTime := requestCooldown - timeSinceLastRequest
+			bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("⏳ Пожалуйста, подождите %d секунд перед следующим поиском.", int(remainingTime.Seconds())+1)))
+			return
+		}
+	}
+
+	// Update last request time
+	userRequestMutex.Lock()
+	userLastRequest[int64(userID)] = time.Now()
+	userRequestMutex.Unlock()
+
+	// Notify user that search is starting
+	searchingMsg := tgbotapi.NewMessage(chatID, "🔍 Выполняется поиск, пожалуйста подождите...")
+	sentMsg, err := bot.Send(searchingMsg)
+	if err != nil {
+		logger.Error("Failed to send searching message", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
 	client, _, err := torrent.LoginKinozal(cfg)
 	if err != nil {
-		bot.Send(tgbotapi.NewMessage(chatID, "Ошибка при входе на Kinozal. Попробуйте позже."))
+		// Delete searching message and send error
+		if sentMsg.MessageID != 0 {
+			deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+			bot.Send(deleteMsg)
+		}
+		bot.Send(tgbotapi.NewMessage(chatID, "❌ Ошибка при входе на Kinozal. Проверьте подключение к интернету и попробуйте позже."))
 		eh.Handle(err, chatID)
 		return
 	}
 
 	results, err := torrent.SearchTorrents(cfg, client, query)
 	if err != nil {
-		bot.Send(tgbotapi.NewMessage(chatID, "Ошибка поиска на Kinozal. Попробуйте позже."))
+		// Delete searching message and send error
+		if sentMsg.MessageID != 0 {
+			deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+			bot.Send(deleteMsg)
+		}
+		
+		// Check if it's a rate limiting issue (400 error)
+		if strings.Contains(err.Error(), "400 Bad Request") {
+			bot.Send(tgbotapi.NewMessage(chatID, "⏳ Слишком много запросов к Kinozal. Подождите немного и попробуйте снова."))
+		} else {
+			bot.Send(tgbotapi.NewMessage(chatID, "❌ Ошибка поиска на Kinozal. Попробуйте изменить поисковый запрос или повторить попытку позже."))
+		}
 		eh.Handle(err, chatID)
 		return
 	}
 
+	// Delete searching message
+	if sentMsg.MessageID != 0 {
+		deleteMsg := tgbotapi.NewDeleteMessage(chatID, sentMsg.MessageID)
+		bot.Send(deleteMsg)
+	}
+
 	if len(results) == 0 {
-		bot.Send(tgbotapi.NewMessage(chatID, "Ничего не найдено по вашему запросу."))
+		bot.Send(tgbotapi.NewMessage(chatID, "❌ Ничего не найдено по вашему запросу. Попробуйте изменить поисковые слова."))
 		return
 	}
 

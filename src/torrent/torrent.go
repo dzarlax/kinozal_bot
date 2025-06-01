@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -178,13 +179,17 @@ func LoginKinozal(cfg *config.Config) (*http.Client, []*http.Cookie, error) {
 }
 
 func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]SearchResult, error) {
-	// URL encode the query to handle spaces and special characters
-	encodedQuery := strings.Replace(query, " ", "+", -1)
+	// Add delay to prevent rate limiting
+	time.Sleep(1 * time.Second)
+	
+	// Properly URL encode the query to handle spaces and special characters
+	encodedQuery := url.QueryEscape(query)
 	searchURL := fmt.Sprintf("https://%s%s?s=%s", cfg.Kinozal.Address, cfg.Kinozal.Endpoints.Search, encodedQuery)
 
 	logger.Debug("Searching torrents", map[string]interface{}{
-		"url":   searchURL,
-		"query": query,
+		"url":           searchURL,
+		"query":         query,
+		"encoded_query": encodedQuery,
 	})
 
 	// Create a new request to set headers
@@ -197,21 +202,80 @@ func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]Se
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Referer", fmt.Sprintf("https://%s/", cfg.Kinozal.Address))
 
-	// Execute the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.NewKinozalError("Failed to execute search request", map[string]interface{}{"error": err.Error()})
-	}
-	defer resp.Body.Close()
-
-	// Check if we got a login page instead of search results
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.NewKinozalError("Search request failed", map[string]interface{}{
-			"status": resp.Status,
+	// Retry mechanism for handling temporary failures
+	maxRetries := 3
+	var resp *http.Response
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		logger.Debug("Search attempt", map[string]interface{}{
+			"attempt": attempt,
+			"max_retries": maxRetries,
 		})
+		
+		// Execute the request
+		resp, err = client.Do(req)
+		if err != nil {
+			if attempt == maxRetries {
+				return nil, errors.NewKinozalError("Failed to execute search request after retries", map[string]interface{}{
+					"error": err.Error(),
+					"attempts": attempt,
+				})
+			}
+			logger.Warn("Search request failed, retrying", map[string]interface{}{
+				"error": err.Error(),
+				"attempt": attempt,
+			})
+			time.Sleep(time.Duration(attempt) * 2 * time.Second) // Progressive delay
+			continue
+		}
+		
+		// Check response status
+		if resp.StatusCode == http.StatusOK {
+			break // Success, proceed with processing
+		}
+		
+		resp.Body.Close() // Close body before retry
+		
+		if resp.StatusCode == 400 {
+			if attempt == maxRetries {
+				return nil, errors.NewKinozalError("Search request failed with 400 Bad Request", map[string]interface{}{
+					"status": resp.Status,
+					"attempts": attempt,
+					"query": query,
+					"encoded_query": encodedQuery,
+				})
+			}
+			logger.Warn("Received 400 Bad Request, retrying with delay", map[string]interface{}{
+				"attempt": attempt,
+				"status": resp.Status,
+			})
+			time.Sleep(time.Duration(attempt) * 3 * time.Second) // Longer delay for 400 errors
+			continue
+		}
+		
+		if attempt == maxRetries {
+			return nil, errors.NewKinozalError("Search request failed", map[string]interface{}{
+				"status": resp.Status,
+				"attempts": attempt,
+			})
+		}
+		
+		logger.Warn("Non-OK status, retrying", map[string]interface{}{
+			"status": resp.Status,
+			"attempt": attempt,
+		})
+		time.Sleep(time.Duration(attempt) * 2 * time.Second)
 	}
+	
+	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -228,7 +292,7 @@ func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]Se
 			return nil, errors.NewKinozalError("Failed to re-login for search", map[string]interface{}{"error": err.Error()})
 		}
 
-		// Recursive call with the new client
+		// Recursive call with the new client (only once to avoid infinite recursion)
 		return SearchTorrents(cfg, newClient, query)
 	}
 
