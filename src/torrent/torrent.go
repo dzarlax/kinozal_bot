@@ -9,7 +9,6 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -184,7 +183,8 @@ func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]Se
 	
 	// Properly URL encode the query to handle spaces and special characters
 	encodedQuery := url.QueryEscape(query)
-	searchURL := fmt.Sprintf("https://%s%s?s=%s", cfg.Kinozal.Address, cfg.Kinozal.Endpoints.Search, encodedQuery)
+	// Use correct Kinozal sorting parameters: t=1 (Сидам) and f=0 (Убывание)
+	searchURL := fmt.Sprintf("https://%s%s?s=%s&t=1&f=0", cfg.Kinozal.Address, cfg.Kinozal.Endpoints.Search, encodedQuery)
 
 	logger.Debug("Searching torrents", map[string]interface{}{
 		"url":           searchURL,
@@ -306,6 +306,13 @@ func SearchTorrents(cfg *config.Config, client *http.Client, query string) ([]Se
 
 	logger.Debug("Search results", map[string]interface{}{
 		"count": len(results),
+	})
+
+	// Results are already sorted by the server using t=1&f=0 parameters (Sort by seeders, descending)
+	// No need for client-side sorting anymore
+
+	logger.Info("Parsed search results", map[string]interface{}{
+		"total_results": len(results),
 	})
 
 	return results, nil
@@ -609,10 +616,8 @@ func ParseSearchResults(html string) []SearchResult {
 		results = append(results, result)
 	})
 
-	// Sort results by seeders (highest first)
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Seeders > results[j].Seeders
-	})
+	// Results are already sorted by the server using t=1&f=0 parameters (Sort by seeders, descending)
+	// No need for client-side sorting anymore
 
 	logger.Info("Parsed search results", map[string]interface{}{
 		"total_results": len(results),
